@@ -25,6 +25,8 @@ class Note:
             The frequency of the note.
         """
 
+        name = name.upper()
+
         if len(name) not in {2, 3}:
             raise ValueError(f"Invalid note name: {name}")
         parts = list(name)
@@ -80,6 +82,18 @@ def add_oscillator(
         },
     )
 
+def add_effect_to_sound_source(
+    path: str,
+    effect: Effect,
+) -> None:
+    requests.put(
+        f"http://localhost:8000/effect/add/{effect.__class__.__name__.lower()}",
+        json={
+            "effect": effect.model_dump(),
+            "path": path,
+        },
+    )
+
 def send_input_to_node(
     path: str,
     input_: SoundSourceInput,
@@ -94,14 +108,3 @@ def send_input_to_node(
 
 def get_time() -> float:
     return requests.get("http://localhost:8000/get-time").json()
-
-# def add_effect_to_sound_source(sound_source_name: str, effect_name: str, effect: Effect) -> None:
-#     effect_type = effect.__class__.__name__.lower()
-#     requests.put(
-#         f"http://localhost:8000/effect/add/{effect_type}",
-#         json={
-#             "sound_source_name": sound_source_name,
-#             "effect_name": effect_name,
-#             "effect": effect.model_dump(),
-#         },
-#     )

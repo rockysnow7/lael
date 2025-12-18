@@ -1,6 +1,6 @@
 from server.audio_engine import AudioEngine
-from common.sound_source import Oscillator, SoundSourceInput
-from common.effect import Volume, Vibrato
+from common.sound_source import Oscillator, SoundSource, SoundSourceInput
+from common.effect import Effect, Volume, Vibrato
 from fastapi import FastAPI, Body
 
 
@@ -25,7 +25,7 @@ def send_input_to_node(
     path = path.split("/")
     audio_engine.send_input_to_node(input, path)
 
-sound_sources = [Oscillator]
+sound_sources: list[type[SoundSource]] = [Oscillator]
 for sound_source in sound_sources:
     api_path = f"/add/sound-source/{sound_source.__name__.lower()}"
 
@@ -37,14 +37,14 @@ for sound_source in sound_sources:
         path = path.split("/")
         audio_engine.add_child_at_path(source, path)
 
-# effects = [Volume, Vibrato]
-# for effect in effects:
-#     path = f"/effect/add/{effect.__name__.lower()}"
+effects: list[type[Effect]] = [Volume, Vibrato]
+for effect in effects:
+    path = f"/effect/add/{effect.__name__.lower()}"
 
-#     @app.put(path)
-#     def add_effect(
-#         sound_source_name: str = Body(...),
-#         effect_name: str = Body(...),
-#         effect: effect = Body(...),
-#     ) -> None:
-#         audio_engine.add_effect_to_sound_source(sound_source_name, effect_name, effect)
+    @app.put(path)
+    def add_effect(
+        effect: effect = Body(title=f"The {effect.__name__} to add"),
+        path: str = Body(title=f"The path of the node to which the {effect.__name__} should be added"),
+    ) -> None:
+        path = path.split("/")
+        audio_engine.add_effect_at_path(effect, path)
