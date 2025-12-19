@@ -1,7 +1,7 @@
 from __future__ import annotations
 from common.constants import SAMPLE_RATE, NUM_SECS_PER_BUFFER, BUFFER_SIZE
 from common.effect import Effect
-from common.sound_source import SoundSource, SoundSourceInput
+from common.sound_source import SoundSource, Event
 from typing import Callable
 
 import torch
@@ -54,9 +54,9 @@ class SoundSourceGroup:
             buffer = effect.apply(buffer)
         return buffer
 
-    def process_input(self, input_: SoundSourceInput) -> None:
+    def process_event(self, event: Event) -> None:
         for child in self.__children.values():
-            child.process_input(input_)
+            child.process_event(event)
 
     def generate_samples(self, buffer: torch.Tensor) -> torch.Tensor:
         if not self.__children:
@@ -101,6 +101,7 @@ class AudioEngine:
         if isinstance(node, SoundSourceGroup):
             node.add_child(name, child)
         else:
+            path = "/".join(path)
             raise ValueError(f"Node at path `{path}` is not a group")
 
     def delete_child_at_path(self, name: str, path: list[str]) -> None:
@@ -108,6 +109,7 @@ class AudioEngine:
         if isinstance(node, SoundSourceGroup):
             node.delete_child(name)
         else:
+            path = "/".join(path)
             raise ValueError(f"Node at path `{path}` is not a group")
 
     def add_effect_at_path(self, effect: Effect, path: list[str]) -> None:
@@ -120,13 +122,14 @@ class AudioEngine:
         node = self.__get_node_at_path(path)
         node.delete_effect(name)
 
-    def send_input_to_node(self, input_: SoundSourceInput, path: list[str]) -> None:
-        input_.timestamp = self.__time
+    def send_event_to_node(self, event: Event, path: list[str]) -> None:
+        event.timestamp = self.__time
 
         node = self.__get_node_at_path(path)
         if node is None:
-            raise ValueError(f"Node at path `{path}` cannot process inputs")
-        node.process_input(input_)
+            path = "/".join(path)
+            raise ValueError(f"Node at path `{path}` not found")
+        node.process_event(event)
 
     def next_buffer(self) -> torch.Tensor:
         time_buffer = torch.arange(BUFFER_SIZE, device=device) / SAMPLE_RATE + self.__time

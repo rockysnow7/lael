@@ -1,5 +1,5 @@
 from server.audio_engine import AudioEngine
-from common.sound_source import Oscillator, SoundSource, SoundSourceInput
+from common.sound_source import Oscillator, SoundSource, Event
 from common.effect import Effect, Volume, Vibrato
 from fastapi import FastAPI, Body
 
@@ -17,13 +17,13 @@ def generate_next_buffer() -> list[float]:
     samples = audio_engine.next_buffer()
     return samples.tolist()
 
-@app.post("/send-input-to-node")
-def send_input_to_node(
-    input: SoundSourceInput = Body(title="The input to send"),
-    path: str = Body(title="The path of the node to send the input to"),
+@app.post("/send-event-to-node")
+def send_event_to_node(
+    event: Event = Body(title="The event to send"),
+    path: str = Body(title="The path of the node to send the event to"),
 ) -> None:
     path = path.split("/")
-    audio_engine.send_input_to_node(input, path)
+    audio_engine.send_event_to_node(event, path)
 
 sound_sources: list[type[SoundSource]] = [Oscillator]
 for sound_source in sound_sources:

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from common.constants import BUFFER_SIZE
 from common.effect import Effect
-from enum import Enum
+from common.event import Event, Press, Release
 from pydantic import BaseModel
 from typing import Callable, Literal
 
@@ -19,25 +19,15 @@ OSCILLATOR_FUNCTIONS: dict[str, OscillatorFunction] = {
 OscillatorFunctionName = Literal[*OSCILLATOR_FUNCTIONS.keys()]
 
 
-class SoundSourcePressDown(BaseModel):
-    frequency: float
-    timestamp: float | None = None
-
-class SoundSourcePressUp(BaseModel):
-    timestamp: float | None = None
-
-SoundSourceInput = SoundSourcePressDown | SoundSourcePressUp
-
-
 class ADSREnvelope(BaseModel):
     attack_duration: float
     decay_duration: float
     sustain_volume: float
     release_duration: float
-    __last_input: SoundSourceInput | None = None
+    __last_event: Event | None = None
 
-    def process_input(self, input_: SoundSourceInput) -> None:
-        self.__last_input = input_
+    def process_event(self, event: Event) -> None:
+        self.__last_event = event
 
     def generate_volume_multipliers(self, buffer: torch.Tensor) -> torch.Tensor:
         """
@@ -50,15 +40,15 @@ class ADSREnvelope(BaseModel):
             A tensor of shape `(BUFFER_SIZE,)`.
         """
 
-        if self.__last_input is None:
+        if self.__last_event is None:
             return torch.zeros_like(buffer)
 
         volume_multipliers = torch.zeros_like(buffer)
 
-        if isinstance(self.__last_input, SoundSourcePressDown):
-            attack_end_time = self.__last_input.timestamp + self.attack_duration
+        if isinstance(self.__last_event.event_content, Press):
+            attack_end_time = self.__last_event.timestamp + self.attack_duration
             attack_mask = buffer < attack_end_time
-            volume_multipliers[attack_mask] = (buffer[attack_mask] - self.__last_input.timestamp) / (attack_end_time - self.__last_input.timestamp)
+            volume_multipliers[attack_mask] = (buffer[attack_mask] - self.__last_event.timestamp) / (attack_end_time - self.__last_event.timestamp)
 
             decay_end_time = attack_end_time + self.decay_duration
             decay_mask = (attack_end_time <= buffer) & (buffer < decay_end_time)
@@ -67,10 +57,10 @@ class ADSREnvelope(BaseModel):
             sustain_mask = buffer >= decay_end_time
             volume_multipliers[sustain_mask] = self.sustain_volume
 
-        elif isinstance(self.__last_input, SoundSourcePressUp):
-            release_end_time = self.__last_input.timestamp + self.release_duration
+        elif isinstance(self.__last_event.event_content, Release):
+            release_end_time = self.__last_event.timestamp + self.release_duration
             release_mask = buffer < release_end_time
-            volume_multipliers[release_mask] = self.sustain_volume * (1 - (buffer[release_mask] - self.__last_input.timestamp) / (release_end_time - self.__last_input.timestamp))
+            volume_multipliers[release_mask] = self.sustain_volume * (1 - (buffer[release_mask] - self.__last_event.timestamp) / (release_end_time - self.__last_event.timestamp))
 
             volume_multipliers[buffer >= release_end_time] = 0
 
@@ -78,13 +68,13 @@ class ADSREnvelope(BaseModel):
 
 class SoundSource(ABC, BaseModel):
     __effects: dict[str, Effect] = {}
-    _last_input: SoundSourceInput | None = None
+    _last_event: Event | None = None
     adsr_envelope: ADSREnvelope | None = None
 
-    def process_input(self, input_: SoundSourceInput) -> None:
-        self._last_input = input_
+    def process_event(self, event: Event) -> None:
+        self._last_event = event
         if self.adsr_envelope is not None:
-            self.adsr_envelope.process_input(input_)
+            self.adsr_envelope.process_event(event)
 
     def add_effect(self, effect_name: str, effect: Effect) -> None:
         self.__effects[effect_name] = effect
@@ -146,7 +136,18 @@ class Oscillator(SoundSource):
 
         return samples
 
-    def process_input(self, input_: SoundSourceInput) -> None:
-        super().process_input(input_)
-        if isinstance(input_, SoundSourcePressDown):
-            self.frequency = input_.frequency
+    def process_event(self, event: Event) -> None:
+        super().process_event(event)
+
+        # if isinstance(event.event_content, Press) and event.event_content.frequency is not None:
+        #     self.frequency = event.event_content.frequency
+
+        match event.event_content:
+            case Press(frequency=frequency):
+                print(f"Press: {frequency=}")
+                if frequency is not None:
+                    self.frequency = frequency
+            case Release():
+                pass
+            case _:
+                raise ValueError(f"Invalid event content: {event.event_content=}")

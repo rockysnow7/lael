@@ -1,8 +1,6 @@
 from __future__ import annotations
-from copy import deepcopy
 from common.effect import Effect
-from common.sound_source import ADSREnvelope, Oscillator, SoundSourceInput
-from enum import Enum
+from common.sound_source import ADSREnvelope, Oscillator, Event
 
 import requests
 import numpy as np
@@ -94,14 +92,15 @@ def add_effect_to_sound_source(
         },
     )
 
-def send_input_to_node(
+def send_event_to_node(
     path: str,
-    input_: SoundSourceInput,
+    event: Event,
 ) -> None:
+    print(f"Sending event {event=} as {event.model_dump()}")
     requests.post(
-        "http://localhost:8000/send-input-to-node",
+        "http://localhost:8000/send-event-to-node",
         json={
-            "input": input_.model_dump(),
+            "event": event.model_dump(),
             "path": path,
         },
     )
